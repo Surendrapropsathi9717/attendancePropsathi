@@ -1,0 +1,68 @@
+{
+  "expo": {
+    "name": "attendancePropsathi",
+    "slug": "attendancePropsathi",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "attendancepropsathi",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera is required for attendance photo",
+        "NSLocationWhenInUseUsageDescription": "Location is required for attendance"
+      }
+    },
+
+    "android": {
+      "package": "com.propsathi.attendance",
+
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
+
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#294e9f"
+      },
+
+      "edgeToEdgeEnabled": true
+    },
+
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png",
+      "name": "Attendance Propsathi",
+      "shortName": "Attendance",
+      "themeColor": "#294e9f",
+      "backgroundColor": "#ffffff",
+      "display": "standalone"
+    },
+
+    "plugins": [
+      "expo-router",
+      "expo-camera",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
+    ],
+
+    "extra": {
+      "eas": {
+        "projectId": "8134b322-06f4-4f64-afae-8ccc20ba5f6a"
+      }
+    }
+  }
+}
