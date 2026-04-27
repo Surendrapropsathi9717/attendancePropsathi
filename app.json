@@ -33,19 +33,18 @@
 
       "edgeToEdgeEnabled": true
     },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png",
-      "name": "Attendance Propsathi",
-      "shortName": "Attendance",
-      "themeColor": "#294e9f",
-      "backgroundColor": "#ffffff",
-      "display": "standalone",
-      "scope": "/",
-      "start_url": "/",
-      "startUrl": "/"
-    },
+   "web": {
+  "bundler": "metro",
+  "output": "static",
+  "favicon": "./assets/images/favicon.png",
+  "name": "Attendance Propsathi",
+  "shortName": "Attendance",
+  "themeColor": "#294e9f",
+  "backgroundColor": "#ffffff",
+  "display": "standalone",
+  "scope": "/",
+  "start_url": "/login"
+},
     "plugins": [
       "expo-router",
       "expo-camera",
