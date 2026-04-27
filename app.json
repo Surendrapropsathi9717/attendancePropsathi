@@ -33,7 +33,6 @@
 
       "edgeToEdgeEnabled": true
     },
-
     "web": {
       "bundler": "metro",
       "output": "static",
@@ -42,9 +41,11 @@
       "shortName": "Attendance",
       "themeColor": "#294e9f",
       "backgroundColor": "#ffffff",
-      "display": "standalone"
+      "display": "standalone",
+      "scope": "/",
+      "start_url": "/",
+      "startUrl": "/"
     },
-
     "plugins": [
       "expo-router",
       "expo-camera",
