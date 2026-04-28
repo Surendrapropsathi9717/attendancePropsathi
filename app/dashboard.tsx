@@ -10,8 +10,8 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useRouter } from "expo-router";
-import * as Location from "expo-location";
 
+import * as Location from "expo-location";
 import CameraBox from "../components/CameraBox";
 
 export default function Dashboard() {
@@ -45,27 +45,20 @@ export default function Dashboard() {
     }
   };
 
-  // ================= LOCATION (FIXED) =================
+  // ================= LOCATION =================
   const getLocationWithAddress = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+
+    if (status !== "granted") {
+      alert("📍 Enable location");
+      return null;
+    }
+
+    const loc = await Location.getCurrentPositionAsync({});
+
+    let addressText = "Location not available";
+
     try {
-      const { status } = await Location.getForegroundPermissionsAsync();
-
-      let finalStatus = status;
-
-      if (status !== "granted") {
-        const req = await Location.requestForegroundPermissionsAsync();
-        finalStatus = req.status;
-      }
-
-      if (finalStatus !== "granted") {
-        alert("📍 Location permission required");
-        return null;
-      }
-
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
       const addressArr = await Location.reverseGeocodeAsync({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
@@ -73,26 +66,36 @@ export default function Dashboard() {
 
       const addr = addressArr[0];
 
-      return {
-        lat: loc.coords.latitude,
-        lon: loc.coords.longitude,
-        address: `${addr?.name || ""}, ${addr?.city || ""}, ${addr?.region || ""}`,
-      };
+      addressText = [
+        addr?.name,
+        addr?.street,
+        addr?.district,
+        addr?.subregion,
+        addr?.region,
+        addr?.postalCode,
+        addr?.country,
+      ]
+        .filter(Boolean)
+        .join(", ");
     } catch (e) {
-      console.log("Location Error:", e);
-      return null;
+      console.log("Geocode Error:", e);
     }
+
+    return {
+      lat: loc.coords.latitude,
+      lon: loc.coords.longitude,
+      address: addressText,
+    };
   };
 
-  // ================= MARK IN (FIXED) =================
+  // ================= MARK IN =================
   const markIn = async () => {
-    if (!image) {
-      alert("📸 Photo required");
+    const location = await getLocationWithAddress();
+
+    if (!location || !image) {
+      alert("Photo + Location required");
       return;
     }
-
-    const location = await getLocationWithAddress();
-    if (!location) return;
 
     try {
       const token = await AsyncStorage.getItem("token");
@@ -111,19 +114,21 @@ export default function Dashboard() {
       );
 
       alert(res.data.message || res.data.msg);
-
       setImage(null);
       loadDashboard();
     } catch (e) {
-      console.log(e);
       alert("IN Error");
     }
   };
 
-  // ================= MARK OUT (FIXED) =================
+  // ================= MARK OUT =================
   const markOut = async () => {
     const location = await getLocationWithAddress();
-    if (!location) return;
+
+    if (!location) {
+      alert("Location required 📍");
+      return;
+    }
 
     try {
       const token = await AsyncStorage.getItem("token");
@@ -143,19 +148,33 @@ export default function Dashboard() {
       alert(res.data.msg);
       loadDashboard();
     } catch (e) {
-      console.log(e);
       alert("OUT Error");
     }
   };
 
   // ================= LOGOUT =================
   const handleLogout = async () => {
-    await AsyncStorage.setItem("isLoggedIn", "false");
-    router.replace("/login");
+    try {
+      await AsyncStorage.setItem("isLoggedIn", "false");
+      router.replace("/login");
+    } catch (e) {
+      console.log(e);
+    }
   };
 
   const inDone = today?.in_time;
   const outDone = today?.out_time;
+
+  // FINAL SAFE LOCATION VARIABLES
+  const inLocation =
+    today?.in_address ||
+    today?.in_location ||
+    (today?.in_lat ? `${today.in_lat}, ${today.in_lon}` : "Not available");
+
+  const outLocation =
+    today?.out_address ||
+    today?.out_location ||
+    (today?.out_lat ? `${today.out_lat}, ${today.out_lon}` : "Not available");
 
   return (
     <ScrollView style={styles.container}>
@@ -165,7 +184,7 @@ export default function Dashboard() {
         <Text style={styles.logoutText}>🚪 Logout</Text>
       </TouchableOpacity>
 
-      {/* ATTENDANCE */}
+      {/* ATTENDANCE CARD */}
       <TouchableOpacity
         style={[styles.card, { backgroundColor: "#00bcd4" }]}
         onPress={() => setAttendanceOpen(!attendanceOpen)}
@@ -176,8 +195,17 @@ export default function Dashboard() {
           Today: {today?.final_status || "Absent"}
         </Text>
 
-        <Text style={{ color: "#fff" }}>IN: {today?.in_time || "--"}</Text>
-        <Text style={{ color: "#fff" }}>OUT: {today?.out_time || "--"}</Text>
+        <Text style={{ color: "#fff" }}>
+          Status: {today?.status || "--"}
+        </Text>
+
+        <Text style={{ color: "#fff" }}>
+          IN: {inDone || "--"}
+        </Text>
+
+        <Text style={{ color: "#fff" }}>
+          OUT: {outDone || "--"}
+        </Text>
       </TouchableOpacity>
 
       {/* STATS */}
@@ -194,29 +222,32 @@ export default function Dashboard() {
       {attendanceOpen && (
         <View style={styles.dropdown}>
 
-          <Text>IN: {inDone || "Not Marked"}</Text>
-          <Text>OUT: {outDone || "Not Marked"}</Text>
+          <Text>🟢 IN Time: {inDone || "Not Marked"}</Text>
+          <Text>📍 IN Location: {inLocation}</Text>
+
+          <Text style={{ marginTop: 10 }}>
+            🔴 OUT Time: {outDone || "Not Marked"}
+          </Text>
+          <Text>📍 OUT Location: {outLocation}</Text>
 
           {!inDone && (
-            <CameraBox onCapture={(img) => {
-              if (img) setImage(img);
-            }} />
+            <CameraBox onCapture={(img) => setImage(img)} />
           )}
 
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: inDone ? "#aaa" : "green" }]}
+            style={[styles.button, { backgroundColor: inDone ? "#aaa" : "#28a745" }]}
             disabled={!!inDone}
             onPress={markIn}
           >
-            <Text style={{ color: "#fff" }}>Mark IN</Text>
+            <Text style={styles.btnText}>Mark IN</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: !inDone || outDone ? "#aaa" : "red" }]}
-            disabled={!inDone || outDone}
+            style={[styles.button, { backgroundColor: !inDone || outDone ? "#aaa" : "#dc3545" }]}
+            disabled={!inDone || !!outDone}
             onPress={markOut}
           >
-            <Text style={{ color: "#fff" }}>Mark OUT</Text>
+            <Text style={styles.btnText}>Mark OUT</Text>
           </TouchableOpacity>
 
         </View>
@@ -226,46 +257,46 @@ export default function Dashboard() {
   );
 }
 
-// ================= STYLE =================
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 15 },
+  container: { flex: 1, padding: 15, backgroundColor: "#f2f4f7" },
 
   logoutBtn: {
     backgroundColor: "red",
     padding: 10,
     borderRadius: 8,
-    marginBottom: 10,
+    marginBottom: 15,
   },
 
   logoutText: { color: "#fff", textAlign: "center" },
 
   card: {
     padding: 20,
-    borderRadius: 10,
+    borderRadius: 12,
     marginBottom: 10,
   },
 
-  title: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-
-  bigText: { color: "#fff", fontSize: 20 },
+  title: { fontSize: 18, color: "#fff", fontWeight: "bold" },
+  bigText: { fontSize: 20, color: "#fff" },
 
   dropdown: {
     backgroundColor: "#fff",
     padding: 15,
-    marginBottom: 10,
     borderRadius: 10,
   },
 
   button: {
     marginTop: 10,
-    padding: 10,
+    padding: 12,
     borderRadius: 8,
     alignItems: "center",
   },
 
+  btnText: { color: "#fff", fontWeight: "bold" },
+
   statsBox: {
-    backgroundColor: "#eee",
+    backgroundColor: "#fff",
     padding: 10,
-    marginBottom: 10,
+    marginVertical: 10,
+    borderRadius: 10,
   },
 });
