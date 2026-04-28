@@ -1,5 +1,5 @@
-import React, { useRef, useState } from "react";
-import { View, TouchableOpacity, Text, StyleSheet, Image } from "react-native";
+import React, { useRef, useState, useEffect } from "react";
+import { View, TouchableOpacity, Text, StyleSheet, Image, Platform } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 
 export default function CameraBox({ onCapture }) {
@@ -7,7 +7,13 @@ export default function CameraBox({ onCapture }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [photo, setPhoto] = useState(null);
 
-  // ❌ REMOVED auto permission loop (important fix)
+  // ✅ FIX: permission handle properly
+  useEffect(() => {
+    if (!permission) return;
+    if (!permission.granted) {
+      requestPermission();
+    }
+  }, [permission]);
 
   if (!permission) {
     return <Text>Loading Camera...</Text>;
@@ -15,39 +21,38 @@ export default function CameraBox({ onCapture }) {
 
   if (!permission.granted) {
     return (
-      <View style={styles.center}>
-        <TouchableOpacity style={styles.btn} onPress={requestPermission}>
-          <Text style={{ color: "#fff" }}>Allow Camera 📸</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity onPress={requestPermission} style={styles.allowBtn}>
+        <Text style={{ color: "#fff" }}>Allow Camera 📸</Text>
+      </TouchableOpacity>
     );
   }
 
   const takePhoto = async () => {
-    if (!cameraRef.current) {
-      alert("Camera not ready");
-      return;
-    }
-
     try {
+      if (!cameraRef.current) {
+        alert("Camera not ready");
+        return;
+      }
+
       const result = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
-        base64: false, // ✅ IMPORTANT: web + android stable
+        base64: true,
+        quality: 0.6,
       });
 
       setPhoto(result);
 
-      // ✅ UNIVERSAL OUTPUT (URI only)
-      onCapture(result.uri);
-
-    } catch (e) {
-      console.log(e);
-      alert("Camera error");
+      if (result?.base64) {
+        onCapture(`data:image/jpeg;base64,${result.base64}`);
+      }
+    } catch (err) {
+      console.log("Camera Error:", err);
+      alert("Camera failed. Try HTTPS or reload.");
     }
   };
 
   return (
     <View style={styles.container}>
+
       {!photo ? (
         <CameraView
           ref={cameraRef}
@@ -61,6 +66,7 @@ export default function CameraBox({ onCapture }) {
       <TouchableOpacity style={styles.btn} onPress={takePhoto}>
         <Text style={{ color: "#fff" }}>Capture</Text>
       </TouchableOpacity>
+
     </View>
   );
 }
@@ -68,13 +74,10 @@ export default function CameraBox({ onCapture }) {
 const styles = StyleSheet.create({
   container: { alignItems: "center", marginTop: 10 },
 
-  center: { alignItems: "center", marginTop: 20 },
-
   camera: {
-    width: 250,
-    height: 250,
+    width: 280,
+    height: 280,
     borderRadius: 10,
-    overflow: "hidden",
   },
 
   btn: {
@@ -82,5 +85,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
     padding: 10,
     borderRadius: 8,
+  },
+
+  allowBtn: {
+    backgroundColor: "#28a745",
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 10,
   },
 });

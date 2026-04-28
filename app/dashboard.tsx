@@ -10,7 +10,6 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useRouter } from "expo-router";
-
 import * as Location from "expo-location";
 import CameraBox from "../components/CameraBox";
 
@@ -21,6 +20,7 @@ export default function Dashboard() {
   const [today, setToday] = useState(null);
   const [stats, setStats] = useState(null);
   const [image, setImage] = useState(null);
+  const [loadingLoc, setLoadingLoc] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -45,28 +45,44 @@ export default function Dashboard() {
     }
   };
 
-  // ================= LOCATION =================
+  // ================= LOCATION (PWA + MOBILE SAFE) =================
   const getLocationWithAddress = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-
-    if (status !== "granted") {
-      alert("📍 Enable location");
-      return null;
-    }
-
-    const loc = await Location.getCurrentPositionAsync({});
-
-    let addressText = "Location not available";
-
     try {
+      setLoadingLoc(true);
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+
+      if (status !== "granted") {
+        alert("📍 Location permission required");
+        setLoadingLoc(false);
+        return null;
+      }
+
+      // ⚡ FIX: timeout crash avoid + low accuracy fallback
+      let loc;
+      try {
+        loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 5000,
+        });
+      } catch (e) {
+        loc = await Location.getLastKnownPositionAsync({});
+      }
+
+      if (!loc) {
+        alert("Location not found");
+        setLoadingLoc(false);
+        return null;
+      }
+
       const addressArr = await Location.reverseGeocodeAsync({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
       });
 
-      const addr = addressArr[0];
+      const addr = addressArr?.[0];
 
-      addressText = [
+      const fullAddress = [
         addr?.name,
         addr?.street,
         addr?.district,
@@ -77,15 +93,19 @@ export default function Dashboard() {
       ]
         .filter(Boolean)
         .join(", ");
-    } catch (e) {
-      console.log("Geocode Error:", e);
-    }
 
-    return {
-      lat: loc.coords.latitude,
-      lon: loc.coords.longitude,
-      address: addressText,
-    };
+      setLoadingLoc(false);
+
+      return {
+        lat: loc.coords.latitude,
+        lon: loc.coords.longitude,
+        address: fullAddress || "Address not found",
+      };
+    } catch (err) {
+      setLoadingLoc(false);
+      alert("Location error");
+      return null;
+    }
   };
 
   // ================= MARK IN =================
@@ -152,29 +172,13 @@ export default function Dashboard() {
     }
   };
 
-  // ================= LOGOUT =================
   const handleLogout = async () => {
-    try {
-      await AsyncStorage.setItem("isLoggedIn", "false");
-      router.replace("/login");
-    } catch (e) {
-      console.log(e);
-    }
+    await AsyncStorage.setItem("isLoggedIn", "false");
+    router.replace("/login");
   };
 
   const inDone = today?.in_time;
   const outDone = today?.out_time;
-
-  // FINAL SAFE LOCATION VARIABLES
-  const inLocation =
-    today?.in_address ||
-    today?.in_location ||
-    (today?.in_lat ? `${today.in_lat}, ${today.in_lon}` : "Not available");
-
-  const outLocation =
-    today?.out_address ||
-    today?.out_location ||
-    (today?.out_lat ? `${today.out_lat}, ${today.out_lon}` : "Not available");
 
   return (
     <ScrollView style={styles.container}>
@@ -184,7 +188,7 @@ export default function Dashboard() {
         <Text style={styles.logoutText}>🚪 Logout</Text>
       </TouchableOpacity>
 
-      {/* ATTENDANCE CARD */}
+      {/* ATTENDANCE */}
       <TouchableOpacity
         style={[styles.card, { backgroundColor: "#00bcd4" }]}
         onPress={() => setAttendanceOpen(!attendanceOpen)}
@@ -195,17 +199,8 @@ export default function Dashboard() {
           Today: {today?.final_status || "Absent"}
         </Text>
 
-        <Text style={{ color: "#fff" }}>
-          Status: {today?.status || "--"}
-        </Text>
-
-        <Text style={{ color: "#fff" }}>
-          IN: {inDone || "--"}
-        </Text>
-
-        <Text style={{ color: "#fff" }}>
-          OUT: {outDone || "--"}
-        </Text>
+        <Text style={{ color: "#fff" }}>IN: {today?.in_time || "--"}</Text>
+        <Text style={{ color: "#fff" }}>OUT: {today?.out_time || "--"}</Text>
       </TouchableOpacity>
 
       {/* STATS */}
@@ -214,7 +209,7 @@ export default function Dashboard() {
           <Text>Present: {stats.present}</Text>
           <Text>Absent: {stats.absent}</Text>
           <Text>Late: {stats.late}</Text>
-          <Text>Half: {stats.half_day}</Text>
+          <Text>Half Day: {stats.half_day}</Text>
         </View>
       )}
 
@@ -222,32 +217,33 @@ export default function Dashboard() {
       {attendanceOpen && (
         <View style={styles.dropdown}>
 
+          {/* 🔥 LOCATION FIX DISPLAY */}
           <Text>🟢 IN Time: {inDone || "Not Marked"}</Text>
-          <Text>📍 IN Location: {inLocation}</Text>
+          <Text>📍 IN Location: {today?.in_address || "--"}</Text>
 
-          <Text style={{ marginTop: 10 }}>
-            🔴 OUT Time: {outDone || "Not Marked"}
-          </Text>
-          <Text>📍 OUT Location: {outLocation}</Text>
+          <Text>🔴 OUT Time: {outDone || "Not Marked"}</Text>
+          <Text>📍 OUT Location: {today?.out_address || "--"}</Text>
 
           {!inDone && (
             <CameraBox onCapture={(img) => setImage(img)} />
           )}
 
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: inDone ? "#aaa" : "#28a745" }]}
-            disabled={!!inDone}
+            style={[styles.btn, { backgroundColor: inDone ? "#aaa" : "green" }]}
+            disabled={inDone}
             onPress={markIn}
           >
-            <Text style={styles.btnText}>Mark IN</Text>
+            <Text style={{ color: "#fff" }}>
+              {loadingLoc ? "Getting Location..." : "Mark IN"}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: !inDone || outDone ? "#aaa" : "#dc3545" }]}
-            disabled={!inDone || !!outDone}
+            style={[styles.btn, { backgroundColor: !inDone ? "#aaa" : "red" }]}
+            disabled={!inDone}
             onPress={markOut}
           >
-            <Text style={styles.btnText}>Mark OUT</Text>
+            <Text style={{ color: "#fff" }}>Mark OUT</Text>
           </TouchableOpacity>
 
         </View>
@@ -258,45 +254,44 @@ export default function Dashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 15, backgroundColor: "#f2f4f7" },
+  container: { flex: 1, padding: 15 },
 
   logoutBtn: {
     backgroundColor: "red",
     padding: 10,
     borderRadius: 8,
-    marginBottom: 15,
+    marginBottom: 10,
   },
 
   logoutText: { color: "#fff", textAlign: "center" },
 
   card: {
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 10,
     marginBottom: 10,
   },
 
-  title: { fontSize: 18, color: "#fff", fontWeight: "bold" },
+  title: { fontSize: 18, color: "#fff" },
+
   bigText: { fontSize: 20, color: "#fff" },
 
   dropdown: {
     backgroundColor: "#fff",
     padding: 15,
     borderRadius: 10,
+    marginTop: 10,
   },
 
-  button: {
-    marginTop: 10,
+  btn: {
     padding: 12,
     borderRadius: 8,
+    marginTop: 10,
     alignItems: "center",
   },
-
-  btnText: { color: "#fff", fontWeight: "bold" },
 
   statsBox: {
     backgroundColor: "#fff",
     padding: 10,
     marginVertical: 10,
-    borderRadius: 10,
   },
 });
