@@ -10,8 +10,8 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useRouter } from "expo-router";
-
 import * as Location from "expo-location";
+
 import CameraBox from "../components/CameraBox";
 
 export default function Dashboard() {
@@ -45,51 +45,54 @@ export default function Dashboard() {
     }
   };
 
-  // ================= LOCATION =================
+  // ================= LOCATION (FIXED) =================
   const getLocationWithAddress = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
 
-    if (status !== "granted") {
-      alert("📍 Enable location");
+      let finalStatus = status;
+
+      if (status !== "granted") {
+        const req = await Location.requestForegroundPermissionsAsync();
+        finalStatus = req.status;
+      }
+
+      if (finalStatus !== "granted") {
+        alert("📍 Location permission required");
+        return null;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const addressArr = await Location.reverseGeocodeAsync({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      });
+
+      const addr = addressArr[0];
+
+      return {
+        lat: loc.coords.latitude,
+        lon: loc.coords.longitude,
+        address: `${addr?.name || ""}, ${addr?.city || ""}, ${addr?.region || ""}`,
+      };
+    } catch (e) {
+      console.log("Location Error:", e);
       return null;
     }
-
-    const loc = await Location.getCurrentPositionAsync({});
-
-    const addressArr = await Location.reverseGeocodeAsync({
-      latitude: loc.coords.latitude,
-      longitude: loc.coords.longitude,
-    });
-
-    const addr = addressArr[0]; 
-
-    const fullAddress = [
-      addr?.name,
-      addr?.street,
-      addr?.district,
-      addr?.subregion,
-      addr?.region,
-      addr?.postalCode,
-      addr?.country,
-    ]
-      .filter(Boolean)
-      .join(", ");
-
-    return {
-      lat: loc.coords.latitude,
-      lon: loc.coords.longitude,
-      address: fullAddress,
-    };
   };
 
-  // ================= MARK IN =================
+  // ================= MARK IN (FIXED) =================
   const markIn = async () => {
-    const location = await getLocationWithAddress();
-
-    if (!location || !image) {
-      alert("Photo + Location required");
+    if (!image) {
+      alert("📸 Photo required");
       return;
     }
+
+    const location = await getLocationWithAddress();
+    if (!location) return;
 
     try {
       const token = await AsyncStorage.getItem("token");
@@ -108,21 +111,19 @@ export default function Dashboard() {
       );
 
       alert(res.data.message || res.data.msg);
+
       setImage(null);
       loadDashboard();
     } catch (e) {
+      console.log(e);
       alert("IN Error");
     }
   };
 
-  // ================= MARK OUT =================
+  // ================= MARK OUT (FIXED) =================
   const markOut = async () => {
     const location = await getLocationWithAddress();
-
-    if (!location) {
-      alert("Location required 📍");
-      return;
-    }
+    if (!location) return;
 
     try {
       const token = await AsyncStorage.getItem("token");
@@ -142,43 +143,32 @@ export default function Dashboard() {
       alert(res.data.msg);
       loadDashboard();
     } catch (e) {
+      console.log(e);
       alert("OUT Error");
     }
   };
 
   // ================= LOGOUT =================
   const handleLogout = async () => {
-    try {
-      await AsyncStorage.setItem("isLoggedIn", "false");
-
-      setTimeout(() => {
-        router.replace("/login");
-      }, 200);
-    } catch (e) {
-      console.log("Logout Error", e);
-    }
+    await AsyncStorage.setItem("isLoggedIn", "false");
+    router.replace("/login");
   };
 
   const inDone = today?.in_time;
   const outDone = today?.out_time;
 
   return (
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+    <ScrollView style={styles.container}>
 
       {/* LOGOUT */}
-      <TouchableOpacity
-        style={styles.logoutBtn}
-        onPress={handleLogout}
-        activeOpacity={0.7}
-      >
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutText}>🚪 Logout</Text>
       </TouchableOpacity>
 
-      {/* ATTENDANCE CARD */}
+      {/* ATTENDANCE */}
       <TouchableOpacity
         style={[styles.card, { backgroundColor: "#00bcd4" }]}
         onPress={() => setAttendanceOpen(!attendanceOpen)}
-        activeOpacity={0.8}
       >
         <Text style={styles.title}>Attendance</Text>
 
@@ -186,41 +176,17 @@ export default function Dashboard() {
           Today: {today?.final_status || "Absent"}
         </Text>
 
-        <Text style={{ color: "#fff", marginTop: 5 }}>
-          Status: {today?.status || "--"}
-        </Text>
-
-        <Text style={{ color: "#fff", marginTop: 5 }}>
-          IN: {today?.in_time || "--"}
-        </Text>
-
-        <Text style={{ color: "#fff", marginTop: 5 }}>
-          OUT: {today?.out_time || "--"}
-        </Text>
+        <Text style={{ color: "#fff" }}>IN: {today?.in_time || "--"}</Text>
+        <Text style={{ color: "#fff" }}>OUT: {today?.out_time || "--"}</Text>
       </TouchableOpacity>
 
       {/* STATS */}
       {stats && (
         <View style={styles.statsBox}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.present}</Text>
-            <Text style={styles.statLabel}>Present</Text>
-          </View>
-
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.absent}</Text>
-            <Text style={styles.statLabel}>Absent</Text>
-          </View>
-
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.late}</Text>
-            <Text style={styles.statLabel}>Late</Text>
-          </View>
-
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.half_day}</Text>
-            <Text style={styles.statLabel}>Half Day</Text>
-          </View>
+          <Text>Present: {stats.present}</Text>
+          <Text>Absent: {stats.absent}</Text>
+          <Text>Late: {stats.late}</Text>
+          <Text>Half: {stats.half_day}</Text>
         </View>
       )}
 
@@ -228,59 +194,33 @@ export default function Dashboard() {
       {attendanceOpen && (
         <View style={styles.dropdown}>
 
-          <Text>🟢 IN Time: {inDone || "Not Marked"}</Text>
-          <Text>📍 IN Location: {today?.in_address || "--"}</Text>
-
-          <Text>🔴 OUT Time: {outDone || "Not Marked"}</Text>
-          <Text>📍 OUT Location: {today?.out_address || "--"}</Text>
+          <Text>IN: {inDone || "Not Marked"}</Text>
+          <Text>OUT: {outDone || "Not Marked"}</Text>
 
           {!inDone && (
-            <CameraBox onCapture={(img) => setImage(img)} />
+            <CameraBox onCapture={(img) => {
+              if (img) setImage(img);
+            }} />
           )}
 
           <TouchableOpacity
-            style={[
-              styles.button,
-              { backgroundColor: inDone ? "#aaa" : "#28a745" },
-            ]}
-            disabled={Boolean(inDone)}
+            style={[styles.button, { backgroundColor: inDone ? "#aaa" : "green" }]}
+            disabled={!!inDone}
             onPress={markIn}
           >
-            <Text style={styles.btnText}>
-              {inDone ? "IN Done" : "Mark IN"}
-            </Text>
+            <Text style={{ color: "#fff" }}>Mark IN</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[
-              styles.button,
-              {
-                backgroundColor:
-                  !inDone || outDone ? "#aaa" : "#dc3545",
-              },
-            ]}
-            disabled={Boolean(!inDone || outDone)}
+            style={[styles.button, { backgroundColor: !inDone || outDone ? "#aaa" : "red" }]}
+            disabled={!inDone || outDone}
             onPress={markOut}
           >
-            <Text style={styles.btnText}>
-              {outDone ? "OUT Done" : "Mark OUT"}
-            </Text>
+            <Text style={{ color: "#fff" }}>Mark OUT</Text>
           </TouchableOpacity>
 
         </View>
       )}
-
-      {/* MEETINGS */}
-      <TouchableOpacity style={[styles.card, { backgroundColor: "#2196f3" }]}>
-        <Text style={styles.title}>Meetings</Text>
-        <Text style={styles.bigText}>Coming Soon</Text>
-      </TouchableOpacity>
-
-      {/* SITE VISITS */}
-      <TouchableOpacity style={[styles.card, { backgroundColor: "#ff9800" }]}>
-        <Text style={styles.title}>Site Visits</Text>
-        <Text style={styles.bigText}>Coming Soon</Text>
-      </TouchableOpacity>
 
     </ScrollView>
   );
@@ -288,57 +228,44 @@ export default function Dashboard() {
 
 // ================= STYLE =================
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 15, backgroundColor: "#f2f4f7" },
+  container: { flex: 1, padding: 15 },
 
   logoutBtn: {
-    backgroundColor: "#dc3545",
+    backgroundColor: "red",
     padding: 10,
     borderRadius: 8,
-    marginBottom: 15,
-    alignItems: "center",
+    marginBottom: 10,
   },
 
-  logoutText: { color: "#fff", fontWeight: "bold" },
+  logoutText: { color: "#fff", textAlign: "center" },
 
   card: {
     padding: 20,
-    borderRadius: 15,
-    marginBottom: 15,
-    elevation: 5,
+    borderRadius: 10,
+    marginBottom: 10,
   },
 
-  title: { fontSize: 18, color: "#fff", fontWeight: "bold" },
+  title: { color: "#fff", fontSize: 18, fontWeight: "bold" },
 
-  bigText: { fontSize: 22, color: "#fff", marginTop: 10 },
+  bigText: { color: "#fff", fontSize: 20 },
 
   dropdown: {
     backgroundColor: "#fff",
     padding: 15,
-    marginBottom: 15,
+    marginBottom: 10,
     borderRadius: 10,
   },
 
   button: {
     marginTop: 10,
-    padding: 12,
+    padding: 10,
     borderRadius: 8,
     alignItems: "center",
   },
 
-  btnText: { color: "#fff", fontWeight: "bold" },
-
   statsBox: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
+    backgroundColor: "#eee",
+    padding: 10,
+    marginBottom: 10,
   },
-
-  statItem: { alignItems: "center" },
-
-  statNumber: { fontSize: 20, fontWeight: "bold" },
-
-  statLabel: { fontSize: 12, color: "#555" },
 });

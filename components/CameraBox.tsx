@@ -1,18 +1,13 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState } from "react";
 import { View, TouchableOpacity, Text, StyleSheet, Image } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 
-export default function CameraBox({ onCapture }: any) {
-  const cameraRef = useRef<any>(null);
+export default function CameraBox({ onCapture }) {
+  const cameraRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
-  const [photo, setPhoto] = useState<any>(null);
+  const [photo, setPhoto] = useState(null);
 
-  // ✅ AUTO PERMISSION
-  useEffect(() => {
-    if (permission && !permission.granted) {
-      requestPermission();
-    }
-  }, [permission]);
+  // ❌ REMOVED auto permission loop (important fix)
 
   if (!permission) {
     return <Text>Loading Camera...</Text>;
@@ -20,9 +15,11 @@ export default function CameraBox({ onCapture }: any) {
 
   if (!permission.granted) {
     return (
-      <TouchableOpacity onPress={requestPermission}>
-        <Text>Allow Camera 📸</Text>
-      </TouchableOpacity>
+      <View style={styles.center}>
+        <TouchableOpacity style={styles.btn} onPress={requestPermission}>
+          <Text style={{ color: "#fff" }}>Allow Camera 📸</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
@@ -34,15 +31,18 @@ export default function CameraBox({ onCapture }: any) {
 
     try {
       const result = await cameraRef.current.takePictureAsync({
-        base64: true,
-        quality: 0.5,
+        quality: 0.7,
+        base64: false, // ✅ IMPORTANT: web + android stable
       });
 
       setPhoto(result);
-      onCapture(`data:image/png;base64,${result.base64}`);
+
+      // ✅ UNIVERSAL OUTPUT (URI only)
+      onCapture(result.uri);
+
     } catch (e) {
-      alert("Camera error");
       console.log(e);
+      alert("Camera error");
     }
   };
 
@@ -67,6 +67,8 @@ export default function CameraBox({ onCapture }: any) {
 
 const styles = StyleSheet.create({
   container: { alignItems: "center", marginTop: 10 },
+
+  center: { alignItems: "center", marginTop: 20 },
 
   camera: {
     width: 250,
