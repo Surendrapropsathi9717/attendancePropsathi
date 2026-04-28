@@ -10,6 +10,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useRouter } from "expo-router";
+
 import * as Location from "expo-location";
 import CameraBox from "../components/CameraBox";
 
@@ -20,7 +21,6 @@ export default function Dashboard() {
   const [today, setToday] = useState(null);
   const [stats, setStats] = useState(null);
   const [image, setImage] = useState(null);
-  const [loadingLoc, setLoadingLoc] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -45,77 +45,41 @@ export default function Dashboard() {
     }
   };
 
-  // ================= LOCATION (PWA + MOBILE SAFE) =================
+  // ================= LOCATION FIX =================
   const getLocationWithAddress = async () => {
-    try {
-      setLoadingLoc(true);
+    const { status } =
+      await Location.requestForegroundPermissionsAsync();
 
-      const { status } = await Location.requestForegroundPermissionsAsync();
-
-      if (status !== "granted") {
-        alert("📍 Location permission required");
-        setLoadingLoc(false);
-        return null;
-      }
-
-      // ⚡ FIX: timeout crash avoid + low accuracy fallback
-      let loc;
-      try {
-        loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 5000,
-        });
-      } catch (e) {
-        loc = await Location.getLastKnownPositionAsync({});
-      }
-
-      if (!loc) {
-        alert("Location not found");
-        setLoadingLoc(false);
-        return null;
-      }
-
-      const addressArr = await Location.reverseGeocodeAsync({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-
-      const addr = addressArr?.[0];
-
-      const fullAddress = [
-        addr?.name,
-        addr?.street,
-        addr?.district,
-        addr?.subregion,
-        addr?.region,
-        addr?.postalCode,
-        addr?.country,
-      ]
-        .filter(Boolean)
-        .join(", ");
-
-      setLoadingLoc(false);
-
-      return {
-        lat: loc.coords.latitude,
-        lon: loc.coords.longitude,
-        address: fullAddress || "Address not found",
-      };
-    } catch (err) {
-      setLoadingLoc(false);
-      alert("Location error");
+    if (status !== "granted") {
+      alert("Enable location");
       return null;
     }
+
+    const loc = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+      maximumAge: 10000,
+    });
+
+    const addressArr = await Location.reverseGeocodeAsync({
+      latitude: loc.coords.latitude,
+      longitude: loc.coords.longitude,
+    });
+
+    const addr = addressArr[0];
+
+    return {
+      lat: loc.coords.latitude,
+      lon: loc.coords.longitude,
+      address: `${addr?.name || ""}, ${addr?.city || ""}`,
+    };
   };
 
   // ================= MARK IN =================
   const markIn = async () => {
     const location = await getLocationWithAddress();
 
-    if (!location || !image) {
-      alert("Photo + Location required");
-      return;
-    }
+    if (!location) return alert("Location required 📍");
+    if (!image) return alert("Photo required 📸");
 
     try {
       const token = await AsyncStorage.getItem("token");
@@ -145,10 +109,7 @@ export default function Dashboard() {
   const markOut = async () => {
     const location = await getLocationWithAddress();
 
-    if (!location) {
-      alert("Location required 📍");
-      return;
-    }
+    if (!location) return alert("Location required 📍");
 
     try {
       const token = await AsyncStorage.getItem("token");
@@ -172,6 +133,7 @@ export default function Dashboard() {
     }
   };
 
+  // ================= LOGOUT =================
   const handleLogout = async () => {
     await AsyncStorage.setItem("isLoggedIn", "false");
     router.replace("/login");
@@ -188,7 +150,7 @@ export default function Dashboard() {
         <Text style={styles.logoutText}>🚪 Logout</Text>
       </TouchableOpacity>
 
-      {/* ATTENDANCE */}
+      {/* ATTENDANCE CARD */}
       <TouchableOpacity
         style={[styles.card, { backgroundColor: "#00bcd4" }]}
         onPress={() => setAttendanceOpen(!attendanceOpen)}
@@ -217,35 +179,33 @@ export default function Dashboard() {
       {attendanceOpen && (
         <View style={styles.dropdown}>
 
-          {/* 🔥 LOCATION FIX DISPLAY */}
-          <Text>🟢 IN Time: {inDone || "Not Marked"}</Text>
+          <Text>🟢 IN: {today?.in_time || "Not Marked"}</Text>
           <Text>📍 IN Location: {today?.in_address || "--"}</Text>
 
-          <Text>🔴 OUT Time: {outDone || "Not Marked"}</Text>
+          <Text>🔴 OUT: {today?.out_time || "Not Marked"}</Text>
           <Text>📍 OUT Location: {today?.out_address || "--"}</Text>
 
           {!inDone && (
             <CameraBox onCapture={(img) => setImage(img)} />
           )}
 
-          <TouchableOpacity
-            style={[styles.btn, { backgroundColor: inDone ? "#aaa" : "green" }]}
-            disabled={inDone}
-            onPress={markIn}
-          >
-            <Text style={{ color: "#fff" }}>
-              {loadingLoc ? "Getting Location..." : "Mark IN"}
+          {!inDone && (
+            <TouchableOpacity style={styles.inBtn} onPress={markIn}>
+              <Text style={{ color: "#fff" }}>Mark IN</Text>
+            </TouchableOpacity>
+          )}
+
+          {inDone && !outDone && (
+            <TouchableOpacity style={styles.outBtn} onPress={markOut}>
+              <Text style={{ color: "#fff" }}>Mark OUT</Text>
+            </TouchableOpacity>
+          )}
+
+          {outDone && (
+            <Text style={{ textAlign: "center", marginTop: 10 }}>
+              ✅ Completed
             </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.btn, { backgroundColor: !inDone ? "#aaa" : "red" }]}
-            disabled={!inDone}
-            onPress={markOut}
-          >
-            <Text style={{ color: "#fff" }}>Mark OUT</Text>
-          </TouchableOpacity>
-
+          )}
         </View>
       )}
 
@@ -253,45 +213,55 @@ export default function Dashboard() {
   );
 }
 
+// ================= STYLE =================
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 15 },
+  container: { flex: 1, padding: 15, backgroundColor: "#f2f4f7" },
 
   logoutBtn: {
-    backgroundColor: "red",
+    backgroundColor: "#dc3545",
     padding: 10,
     borderRadius: 8,
-    marginBottom: 10,
+    marginBottom: 15,
   },
 
-  logoutText: { color: "#fff", textAlign: "center" },
+  logoutText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
 
   card: {
     padding: 20,
-    borderRadius: 10,
-    marginBottom: 10,
+    borderRadius: 15,
+    marginBottom: 15,
   },
 
-  title: { fontSize: 18, color: "#fff" },
+  title: { fontSize: 18, color: "#fff", fontWeight: "bold" },
 
-  bigText: { fontSize: 20, color: "#fff" },
+  bigText: { fontSize: 20, color: "#fff", marginTop: 10 },
 
   dropdown: {
     backgroundColor: "#fff",
     padding: 15,
     borderRadius: 10,
-    marginTop: 10,
-  },
-
-  btn: {
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 10,
-    alignItems: "center",
   },
 
   statsBox: {
     backgroundColor: "#fff",
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+
+  inBtn: {
+    backgroundColor: "#28a745",
     padding: 10,
-    marginVertical: 10,
+    marginTop: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+
+  outBtn: {
+    backgroundColor: "#dc3545",
+    padding: 10,
+    marginTop: 10,
+    borderRadius: 8,
+    alignItems: "center",
   },
 });

@@ -1,96 +1,50 @@
-import React, { useRef, useState, useEffect } from "react";
-import { View, TouchableOpacity, Text, StyleSheet, Image, Platform } from "react-native";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import React, { useState } from "react";
+import { View, Text, TouchableOpacity, Image } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 
 export default function CameraBox({ onCapture }) {
-  const cameraRef = useRef(null);
-  const [permission, requestPermission] = useCameraPermissions();
   const [photo, setPhoto] = useState(null);
 
-  // ✅ FIX: permission handle properly
-  useEffect(() => {
-    if (!permission) return;
-    if (!permission.granted) {
-      requestPermission();
+  const openCamera = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (!perm.granted) {
+      alert("Camera permission required");
+      return;
     }
-  }, [permission]);
 
-  if (!permission) {
-    return <Text>Loading Camera...</Text>;
-  }
+    const result = await ImagePicker.launchCameraAsync({
+      base64: true,
+      quality: 0.6,
+    });
 
-  if (!permission.granted) {
-    return (
-      <TouchableOpacity onPress={requestPermission} style={styles.allowBtn}>
-        <Text style={{ color: "#fff" }}>Allow Camera 📸</Text>
-      </TouchableOpacity>
-    );
-  }
+    if (result.canceled) return;
 
-  const takePhoto = async () => {
-    try {
-      if (!cameraRef.current) {
-        alert("Camera not ready");
-        return;
-      }
+    const img = "data:image/jpeg;base64," + result.assets[0].base64;
 
-      const result = await cameraRef.current.takePictureAsync({
-        base64: true,
-        quality: 0.6,
-      });
-
-      setPhoto(result);
-
-      if (result?.base64) {
-        onCapture(`data:image/jpeg;base64,${result.base64}`);
-      }
-    } catch (err) {
-      console.log("Camera Error:", err);
-      alert("Camera failed. Try HTTPS or reload.");
-    }
+    setPhoto(img);
+    onCapture(img);
   };
 
   return (
-    <View style={styles.container}>
-
+    <View style={{ alignItems: "center", marginTop: 10 }}>
       {!photo ? (
-        <CameraView
-          ref={cameraRef}
-          style={styles.camera}
-          facing="front"
-        />
+        <TouchableOpacity
+          onPress={openCamera}
+          style={{
+            backgroundColor: "#000",
+            padding: 10,
+            borderRadius: 8,
+          }}
+        >
+          <Text style={{ color: "#fff" }}>Open Camera</Text>
+        </TouchableOpacity>
       ) : (
-        <Image source={{ uri: photo.uri }} style={styles.camera} />
+        <Image
+          source={{ uri: photo }}
+          style={{ width: 200, height: 200, borderRadius: 10 }}
+        />
       )}
-
-      <TouchableOpacity style={styles.btn} onPress={takePhoto}>
-        <Text style={{ color: "#fff" }}>Capture</Text>
-      </TouchableOpacity>
-
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { alignItems: "center", marginTop: 10 },
-
-  camera: {
-    width: 280,
-    height: 280,
-    borderRadius: 10,
-  },
-
-  btn: {
-    marginTop: 10,
-    backgroundColor: "#000",
-    padding: 10,
-    borderRadius: 8,
-  },
-
-  allowBtn: {
-    backgroundColor: "#28a745",
-    padding: 10,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-});

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "attendancePropsathi",
+    "name": "Attendance Propsathi",
     "slug": "attendancePropsathi",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -19,30 +19,29 @@
 
     "android": {
       "package": "com.propsathi.attendance",
-
       "permissions": [
         "CAMERA",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
       ],
-
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#294e9f"
       },
-
       "edgeToEdgeEnabled": true
     },
-  "web": {
-    "bundler": "metro",
-    "output": "static",
-    "favicon": "./assets/images/favicon.png",
-    "name": "Attendance Propsathi",
-    "display": "standalone",
-    "scope": "/",
-    "start_url": "/login",
-    "serviceWorker": true
-  },
+
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png",
+      "name": "Attendance Propsathi",
+      "shortName": "Attendance",
+      "scope": "/",
+      "start_url": "/",
+      "orientation": "portrait"
+    },
+
     "plugins": [
       "expo-router",
       "expo-camera",
