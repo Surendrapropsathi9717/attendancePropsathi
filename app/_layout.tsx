@@ -18,17 +18,29 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useEffect(() => {
-    // Manifest add
-    const link = document.createElement("link");
-    link.rel = "manifest";
-    link.href = "/manifest.json";
-    document.head.appendChild(link);
+    // Prevent duplicate injection
+    if (!document.querySelector('link[rel="manifest"]')) {
+      const link = document.createElement("link");
+      link.rel = "manifest";
+      link.href = "/manifest.json";
+      document.head.appendChild(link);
+    }
 
-    // Theme color
-    const meta = document.createElement("meta");
-    meta.name = "theme-color";
-    meta.content = "#0055FF";
-    document.head.appendChild(meta);
+    // Theme color (safe add)
+    if (!document.querySelector('meta[name="theme-color"]')) {
+      const meta = document.createElement("meta");
+      meta.name = "theme-color";
+      meta.content = "#0055FF";
+      document.head.appendChild(meta);
+    }
+
+    // Service worker register (IMPORTANT for install)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/service-worker.js")
+        .then(() => console.log("Service Worker registered"))
+        .catch((err) => console.log("SW error:", err));
+    }
   }, []);
 
   return (
