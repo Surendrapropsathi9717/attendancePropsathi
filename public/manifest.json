@@ -1,0 +1,8 @@
+{
+  "name": "Attendance Propsathi",
+  "short_name": "Attendance",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0055FF",
+  "background_color": "#ffffff"
+}
